@@ -1,0 +1,41 @@
+{
+  "language": "Solidity",
+  "sources": {
+    "@chainlink/contracts/src/v0.8/interfaces/AggregatorV3Interface.sol": {
+      "content": "// SPDX-License-Identifier: MIT\npragma solidity ^0.8.0;\n\ninterface AggregatorV3Interface {\n  function decimals() external view returns (uint8);\n\n  function description() external view returns (string memory);\n\n  function version() external view returns (uint256);\n\n  function getRoundData(uint80 _roundId)\n    external\n    view\n    returns (\n      uint80 roundId,\n      int256 answer,\n      uint256 startedAt,\n      uint256 updatedAt,\n      uint80 answeredInRound\n    );\n\n  function latestRoundData()\n    external\n    view\n    returns (\n      uint80 roundId,\n      int256 answer,\n      uint256 startedAt,\n      uint256 updatedAt,\n      uint80 answeredInRound\n    );\n}\n"
+    },
+    "contracts/FundMe.sol": {
+      "content": "//SPDX-License-Identifier: MIT\npragma solidity ^0.8.8;\n\nimport \"./PriceConverter.sol\";\n\n// \t859.987\n//  840.451 after constant\n//  816.992 after immutable owner address\n//  791.854 after changing onlyOwner modifier base\n// constant immutable keyword save gas\n\n// use if and own created error cost less gas than require\nerror NotOwner();\n\ncontract FundMe {\n    \n    using PriceConverter for uint256;\n    uint256 public constant MINIMUM_USD = 50 * 1e18; // 1*10**18\n    \n    address[] public funders;\n    mapping(address => uint256) public addressToAmountFunded;\n\n\n    address public immutable i_owner;\n    \n    // _; --> follow the rest of code\n    modifier onlyOwner {\n        // require(msg.sender == i_owner, \"Sender is not owner!\");\n        if(msg.sender != i_owner) { revert NotOwner(); }\n        _;\n    }\n\n    AggregatorV3Interface public priceFeed;\n\n    constructor(address priceFeedAddress){\n        i_owner = msg.sender;\n        priceFeed = AggregatorV3Interface(priceFeedAddress);\n    }\n\n    // What happens if someone sends this contract ETH without calling the fun function?\n    // special functions, more details in fallbackExamples.sol \n    receive() external payable {\n        fund();\n    }\n\n    fallback() external payable {\n        fund();\n    }\n\n    function fund() public payable{\n        // Want to be able to set a minimum fund amount in USD\n        // 1. How do we send ETH to this contract\n\n        require(msg.value.getConversionRate(priceFeed) >= MINIMUM_USD, \"Didn't send enough!\"); // 1e18 == 1*10**18 = 1000000000000000000\n        funders.push(msg.sender);\n        addressToAmountFunded[msg.sender] +=  msg.value;\n\n        // What is reveting? ( all change before reverted require cost tx fee, all change after revert cost tx but will revert if require is not passed )\n    }\n\n    //onlyOwner modifier\n    function withdraw() public onlyOwner{\n        /* starting index, ending index, step amount, */\n        for(uint256 funderIndex = 0; funderIndex < funders.length; funderIndex++){\n            //code\n            address funder = funders[funderIndex];\n            addressToAmountFunded[funder] = 0;\n        }\n        // reset the array\n        funders = new address[](0);\n        // actually withdraw the funds\n\n        //transfer\n        // payable(msg.sender).transfer(address(this).balance);\n\n        //send\n        // bool sendSuccess = payable(msg.sender).send(address(this).balance);\n        // require(sendSuccess, \"send failed\");\n\n        //call //proper way to make a fund withdraw\n        (bool callSuccess,) = payable(msg.sender).call{value: address(this).balance}(\"\");        \n        require(callSuccess, \"Call failed\");\n    }\n\n    \n    // 1. Enums\n    // 2. Events\n    // 3. Try / Catch\n    // 4. Function Selectors\n    // 5. abi.encode / decode\n    // 6. Hashing\n    // 7. Yul / Assumbly\n}\n"
+    },
+    "contracts/PriceConverter.sol": {
+      "content": "// SPDX-Licence-Identifier: MIT\r\n\r\npragma solidity ^0.8.0;\r\n\r\nimport \"@chainlink/contracts/src/v0.8/interfaces/AggregatorV3Interface.sol\";\r\n\r\nlibrary PriceConverter {\r\n\r\n     function getPrice(AggregatorV3Interface priceFeed) internal view returns (uint256) {\r\n        // ABI\r\n        // Address of the contract: 0x694AA1769357215DE4FAC081bf1f309aDC325306\r\n\r\n        (,int256 price,,,) = priceFeed.latestRoundData();\r\n        // ETH in terms of USD\r\n        // 3000.0000000\r\n        return uint256(price * 1e10);\r\n    }\r\n\r\n    function getVersion() internal view returns (uint256) {\r\n        AggregatorV3Interface priceFeed = AggregatorV3Interface(0x694AA1769357215DE4FAC081bf1f309aDC325306);\r\n        return priceFeed.version();\r\n    }\r\n\r\n    function getConversionRate(\r\n        uint256 ethAmount, AggregatorV3Interface priceFeed\r\n        ) internal  view returns(uint256){\r\n        uint256 ethPrice = getPrice(priceFeed);\r\n        uint256 ethAmountInUsd = (ethPrice * ethAmount) / 1e18;\r\n        return ethAmountInUsd;\r\n    }\r\n}"
+    }
+  },
+  "settings": {
+    "optimizer": {
+      "enabled": false,
+      "runs": 200
+    },
+    "outputSelection": {
+      "*": {
+        "*": [
+          "abi",
+          "evm.bytecode",
+          "evm.deployedBytecode",
+          "evm.methodIdentifiers",
+          "metadata",
+          "devdoc",
+          "userdoc",
+          "storageLayout",
+          "evm.gasEstimates"
+        ],
+        "": [
+          "ast"
+        ]
+      }
+    },
+    "metadata": {
+      "useLiteralContent": true
+    }
+  }
+}

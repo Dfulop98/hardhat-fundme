@@ -13,7 +13,7 @@ require("hardhat-deploy");
 const COINMARKETCAP_API_KEY = process.env.COINMARKETCAP_API_KEY || "";
 const SEPOLIA_RPC_URL =
     process.env.SEPOLIA_RPC_URL ||
-    "https://eth-sepolia.g.alchemy.com/v2/YOUR-API-KEY";
+    "https://eth-sepolia.g.alchemy.com/v2/588PMc1jDwwXpIl8BJN4QpZPbEq1kP-z";
 const PRIVATE_KEY =
     process.env.PRIVATE_KEY ||
     "0x11ee3108a03081fe260ecdc106554d09d9d1209bcafd46942b10e02943effc4a";
@@ -36,7 +36,7 @@ module.exports = {
     solidity: {
         compilers: [
             {
-                version: "0.8.7",
+                version: "0.8.8",
             },
             {
                 version: "0.6.6",
@@ -52,7 +52,8 @@ module.exports = {
         currency: "USD",
         outputFile: "gas-report.txt",
         noColors: true,
-        // coinmarketcap: COINMARKETCAP_API_KEY,
+        coinmarketcap: COINMARKETCAP_API_KEY,
+        token: "MATIC",
     },
     namedAccounts: {
         deployer: {

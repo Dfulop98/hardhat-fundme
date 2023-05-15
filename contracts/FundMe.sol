@@ -1,41 +1,58 @@
 //SPDX-License-Identifier: MIT
+
+//Pragma
 pragma solidity ^0.8.8;
 
+//Imports
+import "@chainlink/contracts/src/v0.8/interfaces/AggregatorV3Interface.sol";
 import "./PriceConverter.sol";
 
-// 	859.987
-//  840.451 after constant
-//  816.992 after immutable owner address
-//  791.854 after changing onlyOwner modifier base
-// constant immutable keyword save gas
+// Error codes
+error FundMe__NotOwner();
 
-// use if and own created error cost less gas than require
-error NotOwner();
+// Interfaces, Libraries, Contracts
 
+/** @title A contract for crowd funding
+ * @author Fülöp Dobó
+ * @notice This contract is to demo a sample funding contract
+ * @dev This contract price feeds as our library
+ */
 contract FundMe {
-    
+    // type declarations
     using PriceConverter for uint256;
-    uint256 public constant MINIMUM_USD = 50 * 1e18; // 1*10**18
     
-    address[] public funders;
-    mapping(address => uint256) public addressToAmountFunded;
-
-
+    //State variables
+    mapping(address => uint256) public s_addressToAmountFunded;
+    address[] public s_funders;
     address public immutable i_owner;
-    
-    // _; --> follow the rest of code
+    uint256 public constant MINIMUM_USD = 50 * 1e18; // 1*10**18
+
+    AggregatorV3Interface public priceFeed;
+
+    //Modifiers
     modifier onlyOwner {
         // require(msg.sender == i_owner, "Sender is not owner!");
-        if(msg.sender != i_owner) { revert NotOwner(); }
+        if(msg.sender != i_owner) { revert FundMe__NotOwner(); }
         _;
     }
 
-    constructor(){
-        i_owner = msg.sender;
-    }
+    /*
+     Functions order:
+     constructor
+     receive
+     fallback
+     external
+     public
+     internal
+     private
+     view / pure
+     */
 
-    // What happens if someone sends this contract ETH without calling the fun function?
-    // special functions, more details in fallbackExamples.sol 
+    constructor(address priceFeedAddress){
+        i_owner = msg.sender;
+        priceFeed = AggregatorV3Interface(priceFeedAddress);
+    }
+    
     receive() external payable {
         fund();
     }
@@ -44,47 +61,45 @@ contract FundMe {
         fund();
     }
 
+    /**
+     * @notice This function is used to fund the contract
+     * @dev Push funders to the dictionary
+     */
     function fund() public payable{
-        // Want to be able to set a minimum fund amount in USD
-        // 1. How do we send ETH to this contract
+        require(
+            msg.value.getConversionRate(priceFeed) >= MINIMUM_USD,
+             "Didn't send enough!"
+        );
 
-        require(msg.value.getConversionRate() >= MINIMUM_USD, "Didn't send enough!"); // 1e18 == 1*10**18 = 1000000000000000000
-        funders.push(msg.sender);
-        addressToAmountFunded[msg.sender] +=  msg.value;
-
-        // What is reveting? ( all change before reverted require cost tx fee, all change after revert cost tx but will revert if require is not passed )
+        s_addressToAmountFunded[msg.sender] +=  msg.value;
+        s_funders.push(msg.sender);
     }
 
-    //onlyOwner modifier
-    function withdraw() public onlyOwner{
-        /* starting index, ending index, step amount, */
-        for(uint256 funderIndex = 0; funderIndex < funders.length; funderIndex++){
-            //code
-            address funder = funders[funderIndex];
-            addressToAmountFunded[funder] = 0;
+    function withdraw() public payable onlyOwner{
+        for(
+            uint256 funderIndex = 0;
+            funderIndex < s_funders.length;
+            funderIndex++
+        ) {
+            address funder = s_funders[funderIndex];
+            s_addressToAmountFunded[funder] = 0;
         }
-        // reset the array
-        funders = new address[](0);
-        // actually withdraw the funds
-
-        //transfer
-        // payable(msg.sender).transfer(address(this).balance);
-
-        //send
-        // bool sendSuccess = payable(msg.sender).send(address(this).balance);
-        // require(sendSuccess, "send failed");
-
-        //call //proper way to make a fund withdraw
-        (bool callSuccess,) = payable(msg.sender).call{value: address(this).balance}("");        
-        require(callSuccess, "Call failed");
+        s_funders = new address[](0);
+        (bool success,) = payable(msg.sender).call{
+            value: address(this).balance
+        }("");        
+        require(success, "Transfer failed!");
     }
 
-    
-    // 1. Enums
-    // 2. Events
-    // 3. Try / Catch
-    // 4. Function Selectors
-    // 5. abi.encode / decode
-    // 6. Hashing
-    // 7. Yul / Assumbly
+    function getAddressToAmountFunded(address fundingAddress) 
+        public 
+        view 
+        returns (uint256)
+    {
+        return s_addressToAmountFunded[fundingAddress];
+    }
+
+    function getFunder(uint256 index) public view returns (address) {
+        return s_funders[index];
+    }
 }
